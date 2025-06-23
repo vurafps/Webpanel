@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Steam Idle Manager</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #121212;
+      color: white;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      border-radius: 8px;
+      background-color: #1e1e1e;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: #66c0f4;
+    }
+    .section {
+      margin-bottom: 2rem;
+      padding: 20px;
+      background: #2a2a2a;
+      border-radius: 8px;
+    }
+    .section h2 {
+      margin-top: 0;
+      color: #66c0f4;
+      font-size: 1.2rem;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      background: #333;
+      border: 1px solid #555;
+      border-radius: 4px;
+      color: white;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      min-width: 120px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary { background: #66c0f4; }
+    .btn-primary:hover:not(:disabled) { background: #5ab0e3; }
+    .btn-success { background: #28a745; }
+    .btn-success:hover:not(:disabled) { background: #218838; }
+    .btn-danger { background: #dc3545; }
+    .btn-danger:hover:not(:disabled) { background: #c82333; }
+    .btn-secondary { background: #6c757d; }
+    .btn-secondary:hover:not(:disabled) { background: #5a6268; }
+
+    #status {
+      margin-top: 1rem;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+      text-align: center;
+      min-height: 20px;
+    }
+    .status-info { background: #17a2b8; color: white; }
+    .status-success { background: #28a745; color: white; }
+    .status-error { background: #dc3545; color: white; }
+    .status-warning { background: #ffc107; color: #212529; }
+
+    .qr-container {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .qr-code {
+      max-width: 200px;
+      height: auto;
+      border: 2px solid #66c0f4;
+      border-radius: 8px;
+      background: white;
+      padding: 10px;
+    }
+    .hidden { display: none; }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .current-status {
+      background: #333;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 15px;
+    }
+    .status-item { margin: 5px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>🎮 Steam Idle Manager</h1>
+
+  <!-- Core Startup -->
+  <div class="section">
+    <h2>System Controls</h2>
+
+    <label for="coreAppIds">Game App IDs (comma separated)</label>
+    <input id="coreAppIds" type="text" placeholder="e.g. 440,570,730" />
+
+    <div class="button-group">
+      <button id="startCoreBtn" class="btn-secondary">Start Idler Core</button>
+    </div>
+  </div>
+
+  <!-- Login Section -->
+  <div class="section">
+    <h2>Login to Steam</h2>
+    
+    <label for="username">Steam Username</label>
+    <input id="username" type="text" placeholder="Enter your Steam username" />
+    
+    <div class="button-group">
+      <button id="loginBtn" class="btn-primary">Login to Steam</button>
+      <button id="logoutBtn" class="btn-secondary hidden">Logout</button>
+    </div>
+
+    <div id="qrContainer" class="qr-container hidden">
+      <p>Scan this QR code with your Steam Mobile App:</p>
+      <img id="qrCode" class="qr-code" alt="Steam QR Code" />
+      <p><small>Waiting for authentication...</small></p>
+    </div>
+  </div>
+
+  <!-- Idle Management Section -->
+  <div id="idleSection" class="section hidden">
+    <h2>Game Idling</h2>
+    
+    <label for="appIds">Game App IDs (comma separated)</label>
+    <input id="appIds" type="text" placeholder="e.g. 440,570,730" />
+    <small style="color: #ccc;">Find App IDs on SteamDB or in Steam URLs</small>
+    
+    <div class="button-group">
+      <button id="startIdleBtn" class="btn-success">Start Idling</button>
+      <button id="stopIdleBtn" class="btn-danger hidden">Stop Idling</button>
+    </div>
+
+    <div class="current-status">
+      <div class="status-item"><strong>Login Status:</strong> <span id="loginStatus">Not logged in</span></div>
+      <div class="status-item"><strong>Idling Status:</strong> <span id="idlingStatus">Not idling</span></div>
+      <div class="status-item"><strong>Current Games:</strong> <span id="currentGames">None</span></div>
+    </div>
+  </div>
+
+  <div id="status"></div>
+
+  <script>
+    const API_URL = 'http://localhost:3001';
+    
+    const usernameInput = document.getElementById('username');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const qrContainer = document.getElementById('qrContainer');
+    const qrCode = document.getElementById('qrCode');
+    const idleSection = document.getElementById('idleSection');
+    const appIdsInput = document.getElementById('appIds');
+    const startIdleBtn = document.getElementById('startIdleBtn');
+    const stopIdleBtn = document.getElementById('stopIdleBtn');
+    const statusDiv = document.getElementById('status');
+    const startCoreBtn = document.getElementById('startCoreBtn');
+    const coreAppIdsInput = document.getElementById('coreAppIds');
+    
+    const loginStatus = document.getElementById('loginStatus');
+    const idlingStatus = document.getElementById('idlingStatus');
+    const currentGames = document.getElementById('currentGames');
+
+    let currentUsername = '';
+    let loginPolling = null;
+    let statusPolling = null;
+
+    function setStatus(text, type = 'info') {
+      statusDiv.textContent = text;
+      statusDiv.className = `status-${type}`;
+    }
+
+    function showElement(element) {
+      element.classList.remove('hidden');
+    }
+
+    function hideElement(element) {
+      element.classList.add('hidden');
+    }
+
+    async function startLogin() {
+      const username = usernameInput.value.trim();
+      if (!username) {
+        setStatus('Please enter a username', 'error');
+        return;
+      }
+
+      currentUsername = username;
+      setStatus('Starting login process...', 'info');
+      loginBtn.disabled = true;
+
+      try {
+        const res = await fetch(`${API_URL}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+
+        setStatus('Login initiated. Waiting for QR code...', 'info');
+        startLoginPolling();
+
+      } catch (err) {
+        setStatus(`Error: ${err.message}`, 'error');
+        loginBtn.disabled = false;
+        currentUsername = '';
+      }
+    }
+
+    function startLoginPolling() {
+      loginPolling = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_URL}/login-status/${currentUsername}`);
+          const data = await res.json();
+
+          switch (data.status) {
+            case 'qr_ready':
+              if (data.qrCode) {
+                qrCode.src = `${API_URL}${data.qrCode}?t=${Date.now()}`;
+                showElement(qrContainer);
+                setStatus('QR Code ready! Scan with Steam Mobile App', 'info');
+              }
+              break;
+            case 'logged_in':
+              setStatus('Successfully logged in!', 'success');
+              showElement(logoutBtn);
+              showElement(idleSection);
+              hideElement(qrContainer);
+              stopLoginPolling();
+              startStatusPolling();
+              break;
+            case 'error':
+              setStatus(`Login error: ${data.error}`, 'error');
+              stopLoginPolling();
+              resetLoginUI();
+              break;
+          }
+        } catch (err) {
+          console.error('Login polling error:', err);
+        }
+      }, 2000);
+    }
+
+    function stopLoginPolling() {
+      if (loginPolling) {
+        clearInterval(loginPolling);
+        loginPolling = null;
+      }
+    }
+
+    function startStatusPolling() {
+      statusPolling = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_URL}/idle-status/${currentUsername}`);
+          const data = await res.json();
+
+          loginStatus.textContent = data.loggedIn ? 'Logged in' : 'Not logged in';
+          idlingStatus.textContent = data.idling ? 'Idling' : 'Not idling';
+          currentGames.textContent = data.currentGames && data.currentGames.length > 0 
+            ? data.currentGames.join(', ') 
+            : 'None';
+
+          if (data.idling) {
+            hideElement(startIdleBtn);
+            showElement(stopIdleBtn);
+          } else {
+            showElement(startIdleBtn);
+            hideElement(stopIdleBtn);
+          }
+
+        } catch (err) {
+          console.error('Status polling error:', err);
+        }
+      }, 3000);
+    }
+
+    function stopStatusPolling() {
+      if (statusPolling) {
+        clearInterval(statusPolling);
+        statusPolling = null;
+      }
+    }
+
+    function resetLoginUI() {
+      loginBtn.disabled = false;
+      hideElement(logoutBtn);
+      hideElement(qrContainer);
+      hideElement(idleSection);
+      currentUsername = '';
+    }
+
+    async function logout() {
+      if (!currentUsername) return;
+
+      setStatus('Logging out...', 'info');
+
+      try {
+        const res = await fetch(`${API_URL}/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: currentUsername })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Logout failed');
+
+        setStatus('Logged out successfully', 'success');
+        stopLoginPolling();
+        stopStatusPolling();
+        resetLoginUI();
+
+      } catch (err) {
+        setStatus(`Logout error: ${err.message}`, 'error');
+      }
+    }
+
+    async function startIdling() {
+      const appIdsStr = appIdsInput.value.trim();
+      if (!appIdsStr) {
+        setStatus('Please enter at least one App ID', 'error');
+        return;
+      }
+
+      const appIds = appIdsStr.split(',').map(id => id.trim()).filter(id => id);
+      if (appIds.length === 0) {
+        setStatus('Invalid App IDs', 'error');
+        return;
+      }
+
+      setStatus('Starting idling...', 'info');
+
+      try {
+        const res = await fetch(`${API_URL}/start-idle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: currentUsername, appIds })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Start idling failed');
+
+        setStatus(`Started idling ${appIds.length} games`, 'success');
+
+      } catch (err) {
+        setStatus(`Error: ${err.message}`, 'error');
+      }
+    }
+
+    async function stopIdling() {
+      setStatus('Stopping idling...', 'info');
+
+      try {
+        const res = await fetch(`${API_URL}/stop-idle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: currentUsername })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Stop idling failed');
+
+        setStatus('Stopped idling', 'success');
+
+      } catch (err) {
+        setStatus(`Error: ${err.message}`, 'error');
+      }
+    }
+
+    // Event listeners
+    loginBtn.onclick = startLogin;
+    logoutBtn.onclick = logout;
+    startIdleBtn.onclick = startIdling;
+    stopIdleBtn.onclick = stopIdling;
+
+    usernameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !loginBtn.disabled) {
+        startLogin();
+      }
+    });
+
+    appIdsInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !startIdleBtn.classList.contains('hidden')) {
+        startIdling();
+      }
+    });
+
+    startCoreBtn.addEventListener('click', async () => {
+      const username = usernameInput.value.trim();
+      const appIdsStr = coreAppIdsInput.value.trim();
+      const appIds = appIdsStr ? appIdsStr.split(',').map(id => id.trim()).filter(id => id) : [];
+
+      if (!username) {
+        setStatus('Please enter a Steam username to start idler core.', 'error');
+        return;
+      }
+
+      if (appIds.length === 0) {
+        setStatus('Please enter at least one App ID to start idler core.', 'error');
+        return;
+      }
+
+      setStatus('Starting Idler Core...', 'info');
+      console.log('Start Idler Core clicked', { username, appIds });
+
+      try {
+        const res = await fetch(`${API_URL}/start-idle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, appIds })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Failed to start idler core');
+
+        setStatus(`Idler Core started for ${appIds.length} game(s)!`, 'success');
+        console.log('Idler Core started:', data);
+      } catch (err) {
+        setStatus(`Error starting Idler Core: ${err.message}`, 'error');
+        console.error('Error starting Idler Core:', err);
+      }
+    });
+
+    setStatus('Ready to login', 'info');
+  </script>
+</body>
+</html>

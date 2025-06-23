@@ -1,0 +1,2 @@
+//Comment: Please provide all accounts to idle in this format, one per line: vurafps:qrcode  (shared_secret is optional)
+vurafps:qrcode
